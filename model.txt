@@ -1,0 +1,19 @@
+model {
+
+  # Prior
+  beta_1 ~ dnorm(0, 0.001)
+  beta_2 ~ dnorm(0, 0.001)
+  beta_3 ~ dnorm(0, 0.001)
+
+  # Likelihood
+  for (i in 1:strata){
+    for (j in 1:strata_size){
+      phi[i, j] <- exp(beta_1 * elev[i, j] + beta_2 * dist[i, j] + beta_3 * dist[i, j])
+    }
+    for (j in 1:strata_size){
+      lambda[i, j] <- phi[i, j] / sum(phi[i, 1:strata_size])
+    }
+    y[i, 1:strata_size] ~ dmulti(lambda[i, 1:strata_size], 1)
+  }
+
+}
