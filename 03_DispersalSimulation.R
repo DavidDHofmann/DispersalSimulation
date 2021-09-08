@@ -18,16 +18,20 @@ library(foreach)        # For parallel computing (on windows)
 library(doSNOW)         # For parallel computing (on windows)
 library(sf)             # To plot spatial things with ggplot
 
-# Set working directory
-setwd("/home/david/ownCloud/DispersalSimulation")
+# # Set working directory
+# setwd("/home/david/ownCloud/DispersalSimulation")
 
 # Load custom functions
 source("00_Functions.R")
 
-# Load covariate layers and estimated coefficients
-cov <- stack("CovariateLayers.grd")
-nps <- readOGR("NationalParks.shp")
-beta <- read_csv("Estimates.csv")
+# Load covariate layers
+cov <- read_rds("99_CovariateLayers.rds")
+nps <- read_rds("99_NationalParks.rds")
+
+# Load estimated coefficients and step-length & turning angle distributions
+beta    <- read_rds("99_Estimates.rds")
+sl_dist <- read_rds("99_StepLengthDistribution.rds")
+ta_dist <- read_rds("99_TurningAngleDistribution.rds")
 
 # Make sure covariate layers are loaded into memory for maximal efficiency
 cov <- readAll(cov)
@@ -49,6 +53,8 @@ cov %>%
   ggplot() +
     geom_raster(aes(x = x, y = y, fill = value)) +
     geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
+    geom_sf_text(data = st_as_sf(nps), aes(label = ParkName), col = "white"
+      , nudge_y = 10, size = 3) +
     geom_sf(data = st_as_sf(ext_move), col = "red", fill = NA, lty = 2) +
     facet_wrap("covariate") +
     scale_fill_viridis_c(option = "magma") +
@@ -61,16 +67,16 @@ cov %>%
 # Based on the derived selection coefficients, we can now simulate dispersers
 formula <- ~ elev + dist + cos_ta
 prefs     <- beta$Estimate
-sl_dist   <- list(name = "gamma", params = list(shape = 3, scale = 0.5))
-ta_dist   <- list(name = "vonmises", params = list(kappa = 0, mu = 0))
+sl_dist   <- sl_dist
+ta_dist   <- ta_dist
 n_rsteps  <- 25
 n_steps   <- 200
 stop      <- F
 
-# Let's also sample a source point. This time, we will initiate 500 individuals
+# Let's also sample a source point. This time, we will initiate 100 individuals
 # within each national park
 pts <- lapply(1:nrow(nps), function(x) {
-  spsample(nps[x, ], type = "random", n = 500)
+  spsample(nps[x, ], type = "random", n = 100)
 })
 pts <- do.call(rbind, pts)
 pts <- coordinates(pts)
@@ -85,6 +91,7 @@ points(pts, pch = 20, cex = 0.2)
 # Now we expand the code from above to simulate multiple individuals. To make
 # bookkeeping easier, we prepare a tibble.
 sims <- tibble(ID = 1:nrow(pts))
+print(sims)
 
 # Simulate movement for each individual (this will take pretty long)
 sims$simulations <- pbmclapply(1:nrow(sims)
@@ -113,7 +120,7 @@ print(sims)
 ################################################################################
 # Now we expand the code from above to simulate multiple individuals (let's say
 # 10). To make bookkeeping easier, we prepare a tibble.
-sims <- tibble(ID = 1:nrow(pts)
+sims <- tibble(ID = 1:nrow(pts))
 
 # Prepare cluster
 cl <- makeCluster(detectCores() - 1)
@@ -160,4 +167,4 @@ for (i in 1:length(unique(sims$ID))){
 }
 
 # Store simulations
-write_csv(sims, "SimulatedMovements.csv")
+write_rds(sims, "99_SimulatedMovements.rds")

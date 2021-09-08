@@ -1,8 +1,12 @@
 ################################################################################
-#### Simulating Movement Data with Known Preferences
+#### Simulating Movement with Known Preferences
 ################################################################################
-# Description: Use ISSFs to simulate movement trajectories with known
-# preferences
+# Description: In this script, we simulate movement data with known preferences.
+# However, this is not yet the data we will use to conduct connectivity
+# analyses. Rather, it is supposed to generate the kind of data you would
+# collect in the field and then use to fit a step selection model. To simulate
+# the data, we will use the exact same framework (i.e. step selection functions)
+# that we will later use to simulate virtual dispersers to assess connectivity.
 
 # Clear R's brain
 rm(list = ls())
@@ -18,8 +22,8 @@ library(sf)             # For nice plots
 library(lubridate)      # To handle times
 library(rgdal)          # To save shapefile
 
-# Set working directory
-setwd("/home/david/ownCloud/DispersalSimulation")
+# # Set working directory
+# setwd("/home/david/ownCloud/DispersalSimulation")
 
 # Load custom functions
 source("00_Functions.R")
@@ -71,7 +75,8 @@ np3 <- Polygons(list(np3), 3)
 nps <- SpatialPolygons(list(np1, np2, np3))
 nps$ParkName <- c("Northern NP", "Southern NP", "Eastern NP")
 
-# Also put three points of attraction inside each national park
+# Also put a spatial point inside each national park. We'll later use them as
+# points of attraction.
 pts <- SpatialPoints(rbind(
     c(30, 73)
   , c(30, 28)
@@ -84,7 +89,7 @@ pts <- SpatialPoints(rbind(
 dist <- distanceFromPoints(elev, pts)
 dist <- sqrt(dist)
 
-# Normalize each of the covariates
+# Standardize (center and scale) each of the covariates
 elev <- (elev - cellStats(elev, mean)) / cellStats(elev, sd)
 dist <- (dist - cellStats(dist, mean)) / cellStats(dist, sd)
 
@@ -92,11 +97,15 @@ dist <- (dist - cellStats(dist, mean)) / cellStats(dist, sd)
 cov <- stack(elev, dist)
 names(cov) <- c("elev", "dist")
 
-# We expand each covariate layer to this extent and randomize covariate values
-# within the buffer zone
+# We slightly expand each covariate layer and randomize covariate values within
+# the buffer zone.
 cov <- extendRaster(cov, extent(-20, 120, -20, 120))
 
-# In any case, for now we will limit movement to the main study area
+# We also want to specify the extent on which our animals are allowed to move.
+# For now we will limit movement to the main study area, but we won't allow any
+# movement through the buffer zone. Later, when we simulate movement to assess
+# connectivity, we will use the buffer zone to mitigate edge effects. Here,
+# however, this is not required.
 ext_move <- extent(c(0, 100, 0, 100))
 ext_move <- as(ext_move, "SpatialPolygons")
 
@@ -107,6 +116,8 @@ cov %>%
   ggplot() +
     geom_raster(aes(x = x, y = y, fill = value)) +
     geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
+    geom_sf_text(data = st_as_sf(nps), aes(label = ParkName), col = "white"
+      , nudge_y = 10, size = 3) +
     geom_sf(data = st_as_sf(ext_move), col = "red", fill = NA, lty = 2) +
     facet_wrap("covariate") +
     scale_fill_viridis_c(option = "magma") +
@@ -116,6 +127,16 @@ cov %>%
 ################################################################################
 #### Simulating a Single Trajectory
 ################################################################################
+# Let's start simple and simulate a single trajectory. For this, we first need
+# to specify some simulation parameters.
+# formula   : model formula that is used to span the design matrix
+# prefs     : preferences for each term in the resulting model matrix
+# sl_dist   : step length distribution used to draw random steps (same format as in the amt package)
+# ta_dist   : turning angle distribution used to draw random steps (same format as in the amt package)
+# n_rsteps  : number of random steps proposed at each iteration 
+# n_steps   : number of steps simulated in total (realized)
+# stop      : true/false whether the simulation should stop in case an individual hits a map boundary
+
 # Simulation Parameters
 formula <- ~ elev + dist + cos_ta  # They need to match the covariates
 prefs     <- c(0.5, -0.2, 1)       # They need to match the formula!!!
@@ -125,12 +146,12 @@ n_rsteps  <- 25
 n_steps   <- 200
 stop      <- T
 
-# To try out the function, sample a random starting location within a national
-# park
+# Sample a random starting location within any national park
 pts <- coordinates(spsample(nps, type = "random", n = 1))
 
-# Apply the simulation function an let a virtual disperser move across the
-# landscape
+# Apply the "move" function an let a virtual disperser move across the
+# landscape. The move function simulates a trajectory using the step selection
+# framework.
 sim <- move(
     xy       = pts
   , covars   = cov
@@ -144,7 +165,7 @@ sim <- move(
   , stop     = stop
 )
 
-# And plot it
+# And plot the trajectory
 cov[[1]] %>%
   as.data.frame(xy = T) %>%
   ggplot() +
@@ -152,14 +173,18 @@ cov[[1]] %>%
     geom_point(data = sim, inherit.aes = F, aes(x = x, y = y), size = 0.8) +
     geom_path(data = sim, inherit.aes = F, aes(x = x, y = y), size = 0.3) +
     geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
+    geom_sf_text(data = st_as_sf(nps), aes(label = ParkName), col = "white"
+      , nudge_y = 10, size = 2) +
     geom_sf(data = st_as_sf(ext_move), col = "red", fill = NA, lty = 2) +
     scale_fill_viridis_c(option = "magma") +
     theme_minimal() +
     coord_sf()
 
-# We can even plot a nice animation of the trajectory
+# We can even plot a nice animation of the trajectory (we need to plot it to an
+# external windo though)
 range_x <- range(sim$x)
 range_y <- range(sim$y)
+x11()
 for (i in 1:nrow(sim)){
   plot(sim$y[1:i] ~ sim$x[1:i]
     , type = "o"
@@ -170,6 +195,7 @@ for (i in 1:nrow(sim)){
     , ylab = "y"
     , main = paste0("A First Simulation - Step ", i)
   )
+  Sys.sleep(0.05)
 }
 
 ################################################################################
@@ -177,7 +203,7 @@ for (i in 1:nrow(sim)){
 ################################################################################
 # Now we expand the code from above to simulate multiple individuals. To make
 # bookkeeping easier, we prepare a tibble.
-sims <- tibble(ID = 1:100)
+sims <- tibble(ID = 1:25)
 
 # Also sample sourcepoint for each individual within national park. For
 # simplicity, we will place source points randomly. However, you could also
@@ -210,12 +236,17 @@ sims$simulations <- pbmclapply(1:nrow(sims)
 # Let's take a look at the final object
 print(sims)
 
+# You can see that not all trajectories consist of 200 steps. This is because
+# some individuals hit a map boundary and we specified to stop the simulation in
+# such cases.
+summary(sapply(sims$simulations, nrow))
+
 ################################################################################
 #### Multiple Trajectories (in parallel on windows)
 ################################################################################
 # Now we expand the code from above to simulate multiple individuals (let's say
 # 10). To make bookkeeping easier, we prepare a tibble.
-sims <- tibble(ID = 1:100)
+sims <- tibble(ID = 1:25)
 
 # Also sample sourcepoint for each individual within national park. For
 # simplicity, we will place source points randomly. However, you could also
@@ -255,6 +286,14 @@ sims$simulations <- foreach(x = 1:nrow(sims), .packages = "raster", .options.sno
 registerDoSEQ()
 stopCluster(cl)
 
+# Let's take a look at the final object
+print(sims)
+
+# You can see that not all trajectories consist of 200 steps. This is because
+# some individuals hit a map boundary and we specified to stop the simulation in
+# such cases.
+summary(sapply(sims$simulations, nrow))
+
 ################################################################################
 #### Cleaning and Visualizing Simulations
 ################################################################################
@@ -268,7 +307,7 @@ sims$ID <- as.factor(sims$ID)
 sims$step_id <- 1:nrow(sims)
 
 # Also assign a timestamp to each step (with som randomness)
-sims$timestamp <- as.POSIXct("2021-01-01 11:00:00") +
+sims$timestamp <- ymd_hms("2021-01-01 11:00:00") +
   sims$step_number * hours(1) +
   seconds(rnorm(n = nrow(sims), mean = 0, sd = 300))
 
@@ -283,32 +322,40 @@ cov[[1]] %>%
     geom_point(data = sims, inherit.aes = F, aes(x = x, y = y, col = ID), size = 0.8) +
     geom_path(data = sims, inherit.aes = F, aes(x = x, y = y, col = ID), size = 0.3) +
     geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
+    geom_sf_text(data = st_as_sf(nps), aes(label = ParkName), col = "white"
+      , nudge_y = 10, size = 3) +
     geom_sf(data = st_as_sf(ext_move), col = "red", fill = NA, lty = 2) +
     scale_fill_viridis_c(option = "magma") +
     theme_minimal() +
     coord_sf() +
     theme(legend.position = "none")
 
-# In reality, we don't observe step lengths, turning angles etc. and we have to
+# In reality, we don't observe step lengths, turning angles etc. but have to
 # derive them from xy coordinates. Hence, let's assume that we only observed xy
-# data + ID. Remove the rest.
+# data + ID and remove the rest.
 obs <- dplyr::select(sims, x, y, ID, step_number, step_id, timestamp)
 
-# Also, in reality we might have some missing fixes. So let's randomly remove
-# some fixes (here, 5%).
+# Also, in reality we might have some missing fixes. Let's randomly remove some
+# fixes (here, 5%).
 remove <- sample(1:nrow(obs), size = nrow(obs) * 0.05, replace = F)
 obs <- obs[-remove, ]
 
-# This is the type of data that we would observe in reality. Let's store it to
-# file. Also store the simulated spatial layers to file
-write_csv(obs, "ObservedMovements.csv")
-writeRaster(cov, "CovariateLayers.grd", overwrite = T)
-writeOGR(nps, ".", "NationalParks", driver = "ESRI Shapefile", overwrite = T)
+# Let's look at the final dataframe
+head(obs, 20)
 
-# Let's also store the true preferences
+# This is the type of data that we would observe in reality. Let's store it to
+# file so that we can later analyse it. Also store the simulated spatial layers
+# to file, as well as the national parks.
+write_rds(obs, "99_ObservedMovements.rds")
+write_rds(cov, "99_CovariateLayers.rds")
+write_rds(nps, "99_NationalParks.rds")
+
+# Let's also store the true preferences used for the simulation. Our goal later
+# will be to estimate these using a step selection model.
 true_prefs <- data.frame(
     Coefficient      = prefs
   , Covariate        = c("elev", "dist", "cos_ta")
   , stringsAsFactors = F
 )
-write_csv(true_prefs, "TruePreferences.csv")
+true_prefs
+write_rds(true_prefs, "99_TruePreferences.rds")
