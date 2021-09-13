@@ -14,15 +14,15 @@ rm(list = ls())
 # Load required packages
 library(RandomFields)   # To simulate covariates
 library(raster)         # To handle spatial data
-library(pbmcapply)      # For parallel computing (on linux/mac)
-library(foreach)        # For parallel computing (on windows)
-library(doSNOW)         # For parallel computing (on windows)
+library(foreach)        # For parallel computing
+library(doSNOW)         # For parallel computing
+library(parallel)       # For parallel computing
 library(tidyverse)      # For data wrangling
 library(sf)             # For nice plots
 library(lubridate)      # To handle times
 library(rgdal)          # To save shapefile
 
-# # Set working directory
+# Set working directory
 # setwd("/home/david/ownCloud/DispersalSimulation")
 
 # Load custom functions
@@ -43,7 +43,6 @@ elev <- RMexp(var = 5, scale = 30) +
   RMnugget(var = 0.5) +
   RMtrend(mean = 0)
 elev <- RFsimulate(elev, x = 1:500, y = 1:500)
-elev <- as.matrix(elev)
 elev <- raster(elev)
 elev <- setExtent(elev, ext)
 
@@ -54,7 +53,7 @@ gradient <- raster(elev)
 values(gradient) <- outer(x, y, function(x, y){0 * x + 1 * y})
 
 # Now add the gradient to our elevation raster
-elev <- elev + 3 * gradient
+elev <- elev + 5 * gradient
 
 # Assume there are three national parks inside the study area
 np1 <- Polygon(data.frame(
@@ -133,7 +132,7 @@ cov %>%
 # prefs     : preferences for each term in the resulting model matrix
 # sl_dist   : step length distribution used to draw random steps (same format as in the amt package)
 # ta_dist   : turning angle distribution used to draw random steps (same format as in the amt package)
-# n_rsteps  : number of random steps proposed at each iteration 
+# n_rsteps  : number of random steps proposed at each iteration
 # n_steps   : number of steps simulated in total (realized)
 # stop      : true/false whether the simulation should stop in case an individual hits a map boundary
 
@@ -199,50 +198,7 @@ for (i in 1:nrow(sim)){
 }
 
 ################################################################################
-#### Multiple Trajectories (in parallel on mac/linux)
-################################################################################
-# Now we expand the code from above to simulate multiple individuals. To make
-# bookkeeping easier, we prepare a tibble.
-sims <- tibble(ID = 1:25)
-
-# Also sample sourcepoint for each individual within national park. For
-# simplicity, we will place source points randomly. However, you could also
-# initiate the same number of individuals within each national park.
-pts <- coordinates(spsample(nps, type = "random", n = nrow(sims)))
-
-# Visualize
-plot(cov[["elev"]])
-points(pts, pch = 20, cex = 0.2)
-
-# Simulate movement for each individual
-sims$simulations <- pbmclapply(1:nrow(sims)
-  , ignore.interactive = T
-  , mc.cores           = detectCores() - 1
-  , FUN                = function(x){
-    move(
-        xy       = rbind(pts[x, ])
-      , covars   = cov
-      , formula  = formula
-      , prefs    = prefs
-      , sl_dist  = sl_dist
-      , ta_dist  = ta_dist
-      , ext      = ext_move
-      , n_steps  = n_steps
-      , n_rsteps = n_rsteps
-      , stop     = stop
-    )
-})
-
-# Let's take a look at the final object
-print(sims)
-
-# You can see that not all trajectories consist of 200 steps. This is because
-# some individuals hit a map boundary and we specified to stop the simulation in
-# such cases.
-summary(sapply(sims$simulations, nrow))
-
-################################################################################
-#### Multiple Trajectories (in parallel on windows)
+#### Multiple Trajectories
 ################################################################################
 # Now we expand the code from above to simulate multiple individuals (let's say
 # 10). To make bookkeeping easier, we prepare a tibble.
@@ -254,7 +210,7 @@ sims <- tibble(ID = 1:25)
 pts <- coordinates(spsample(nps, type = "random", n = nrow(sims)))
 
 # Also sample random start points for each individual
-plot(cov[["elev"]])
+plot(cov[["elev"]], asp = 1.03)
 points(pts, pch = 20, cex = 0.2)
 
 # Prepare cluster

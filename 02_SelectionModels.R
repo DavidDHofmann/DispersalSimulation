@@ -15,14 +15,13 @@ library(amt)           # For quick resource selection
 library(broom)         # To clean a model
 library(rgdal)         # To load shapefiles
 library(sf)            # For nice plots
-library(parallel)      # For multicore use
-library(pbmcapply)     # For progress bar multicore use
+library(pbmcapply)     # For parallel computing
 
-# # Set working directory
+# Set working directory
 # setwd("/home/david/ownCloud/DispersalSimulation")
 
 # Load custom functions
-source("00_Functions.R")
+# source("00_Functions.R")
 
 # Load observed movement data and covariate layers as well as the true
 # preferences
@@ -159,7 +158,7 @@ extracted <- extract_covariates_along_interpolated(ssf, cov, by = 0.1)
 ssf <- cbind(ssf, extracted)
 
 ################################################################################
-#### Estimate Beta: USING CLOGIT
+#### Estimate Beta
 ################################################################################
 # Now we can contrast realized and random steps using conditional logistic
 # regression analysis. For simplicity, we do not consider random effects (in our
@@ -181,8 +180,13 @@ beta_cl <- coef(mod)
 # Visualize the model and add the true preferences for comparison
 ggplot(tidy(mod$model), aes(x = estimate, y = term)) +
   geom_point() +
-  geom_errorbarh(aes(xmin = estimate - 1.96 * std.error, xmax = estimate + 1.96 * std.error), height = 0.1) +
-  geom_point(data = truth, inherit.aes = F, aes(x = Coefficient, y = Covariate), col = "red", pch = 8, size = 3) +
+  geom_errorbarh(aes(
+      xmin = estimate - 1.96 * std.error
+    , xmax = estimate + 1.96 * std.error)
+    , height = 0.1
+  ) +
+  geom_point(data = truth, inherit.aes = F, aes(x = Coefficient, y = Covariate)
+    , col = "red", pch = 8, size = 3) +
   theme_classic() +
   geom_vline(xintercept = 0, linetype = 2)
 
