@@ -13,9 +13,9 @@ library(raster)         # To handle spatial data
 library(viridis)        # For nice colors
 library(rgdal)          # To load shapefiles
 library(rgeos)          # For geometry manipulation
-library(pbmcapply)      # For parallel computing (on linux/mac)
 library(foreach)        # For parallel computing (on windows)
 library(doSNOW)         # For parallel computing (on windows)
+library(parallel)       # For parallel computing (on windows)
 library(sf)             # To plot spatial things with ggplot
 
 # # Set working directory
@@ -86,37 +86,7 @@ plot(cov[["elev"]])
 points(pts, pch = 20, cex = 0.2)
 
 ################################################################################
-#### Multiple Trajectories (in parallel on mac/linux)
-################################################################################
-# Now we expand the code from above to simulate multiple individuals. To make
-# bookkeeping easier, we prepare a tibble.
-sims <- tibble(ID = 1:nrow(pts))
-print(sims)
-
-# Simulate movement for each individual (this will take pretty long)
-sims$simulations <- pbmclapply(1:nrow(sims)
-  , ignore.interactive = T
-  , mc.cores           = detectCores() - 1
-  , FUN                = function(x){
-    move(
-        xy       = rbind(pts[x, ])
-      , covars   = cov
-      , formula  = formula
-      , prefs    = prefs
-      , sl_dist  = sl_dist
-      , ta_dist  = ta_dist
-      , ext      = ext_move
-      , n_steps  = n_steps
-      , n_rsteps = n_rsteps
-      , stop     = stop
-    )
-})
-
-# Let's take a look at the final object
-print(sims)
-
-################################################################################
-#### Multiple Trajectories (in parallel on windows)
+#### Multiple Trajectories
 ################################################################################
 # Now we expand the code from above to simulate multiple individuals (let's say
 # 10). To make bookkeeping easier, we prepare a tibble.
@@ -159,7 +129,7 @@ sims <- sims %>% unnest(simulations)
 
 # Visualize them
 ids <- unique(sims$ID)
-plot(cov[["elev"]])
+plot(cov[["elev"]], asp = 1.03)
 for (i in 1:length(unique(sims$ID))){
   sub <- subset(sims, ID == ids[i])
   points(sub$y ~ sub$x, col = i, pch = 16, cex = 0.4)

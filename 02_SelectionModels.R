@@ -21,7 +21,7 @@ library(pbmcapply)     # For parallel computing
 # setwd("/home/david/ownCloud/DispersalSimulation")
 
 # Load custom functions
-# source("00_Functions.R")
+source("00_Functions.R")
 
 # Load observed movement data and covariate layers as well as the true
 # preferences
@@ -153,7 +153,8 @@ ssf <- ssf %>%
   select(-step_id_)
 
 # Finally, we extract covariates along each step and calculate average values
-# along the steps and bind the extracted data to the respective step
+# along the steps and bind the extracted data to the respective step. On windows
+# machines, this will throw a warning which you can ignore.
 extracted <- extract_covariates_along_interpolated(ssf, cov, by = 0.1)
 ssf <- cbind(ssf, extracted)
 
