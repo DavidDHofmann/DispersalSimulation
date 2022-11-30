@@ -18,8 +18,8 @@ library(doSNOW)         # For parallel computing (on windows)
 library(parallel)       # For parallel computing (on windows)
 library(sf)             # To plot spatial things with ggplot
 
-# # Set working directory
-# setwd("/home/david/ownCloud/DispersalSimulation")
+# Set working directory
+setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation")
 
 # Load custom functions
 source("00_Functions.R")

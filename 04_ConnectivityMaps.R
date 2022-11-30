@@ -21,8 +21,8 @@ library(igraph)         # For network analysis
 library(ggpubr)         # To arrange multiple ggplots
 library(ggnetwork)      # To plot a network using ggplot
 
-# # Set working directory
-# setwd("/home/david/ownCloud/DispersalSimulation")
+# Set working directory
+setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation")
 
 # Load custom functions
 source("00_Functions.R")

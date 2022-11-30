@@ -26,7 +26,7 @@ library(rgdal)          # To save shapefile
 # setwd("/home/david/ownCloud/DispersalSimulation")
 
 # Load custom functions
-source("00_Functions.R")
+source("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation/00_Functions.R")
 
 ################################################################################
 #### Simulate Covariates
