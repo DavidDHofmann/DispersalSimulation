@@ -56,6 +56,35 @@ interpolatePoints <- function(x1, x2, y1, y2, by = 1){
 # )
 # summary(benchmark)
 
+
+################################################################################
+#### Function to Interpolate and entire Path
+################################################################################
+# Function that takes a path (sequence of steps) and interpolates to a certain
+# maximum distance
+interpolatePath <- function(x, y, eps = 0.1) {
+  inter <- lapply(1:(length(x) - 1), function(i) {
+    xy_new <- interpolatePoints(
+        x1 = x[i]
+      , x2 = x[i + 1]
+      , y1 = y[i]
+      , y2 = y[i + 1]
+      , by = eps
+    )
+    xy_new <- as.data.frame(xy_new)
+    xy_new$segment_id <- i
+    return(xy_new)
+  })
+  inter <- do.call(rbind, inter)
+  return(inter)
+}
+
+# Try it
+# path <- data.frame(x = c(1, 5, 3), y = c(0, 2, 10))
+# path_inter <- interpolatePath(x = path$x, y = path$y, eps = 0.25)
+# plot(y ~ x, data = path, type = "o", pch = 20, xlim = c(0, 10), ylim = c(0, 10))
+# points(y ~ x, data = path_inter, pch = 20, col = "red")
+
 ################################################################################
 #### Von Mises Distribution Functions
 ################################################################################

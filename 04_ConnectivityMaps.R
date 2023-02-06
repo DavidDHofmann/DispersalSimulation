@@ -36,6 +36,9 @@ sims <- read_rds("99_SimulatedMovements.rds")
 ext <- extent(extent(0, 100, 0, 100))
 ext <- as(ext, "SpatialPolygons")
 
+# Assign IDs to NPs
+nps$ID <- 1:nrow(nps)
+
 ################################################################################
 #### Heatmap
 ################################################################################
@@ -70,7 +73,19 @@ heatmap <- crop(heatmap, ext)
 plot_heatmap <- ggplot(as.data.frame(heatmap, xy = T)) +
   geom_raster(aes(x = x, y = y, fill = layer)) +
   geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
-  scale_fill_viridis(option = "magma", name = "Traversal Frequency") +
+  scale_fill_gradientn(
+      colors = hcl.colors(n = 100, palette = "Spectral", rev = T)
+    , name   = "Traversal Frequency"
+    # , trans  = "sqrt"
+    , guide   = guide_colorbar(
+        show.limits    = T
+      , title.position = "top"
+      , title.hjust    = 0.5
+      , ticks          = T
+      , barheight      = unit(0.3, "cm")
+      , barwidth       = unit(10.0, "cm")
+    )
+  ) +
   theme_minimal() +
   theme(legend.position = "bottom") +
   ggtitle("Heatmap") +
@@ -91,15 +106,23 @@ plot(grid)
 vertices <- values(grid)
 lay <- as.matrix(as.data.frame(grid, xy = T)[, c(1, 2)])
 
+# Interpolate simulated data to detect cell-transitions at finer scale
+sims_inter <- sims %>%
+  nest(data = -c(SourceArea, ID)) %>%
+  mutate(data = map(data, function(x) {
+    interpolatePath(x$x, x$y, eps = 0.1)
+  })) %>%
+  unnest(data)
+
 # At each coordinate of the simulated trajectories we now extract the cell IDs
 # from the grid (this allows us to see from which to which cell an individual
 # moved)
 visits <- data.frame(
-    ID          = sims$ID
-  , step_number = sims$step_number
-  , x           = sims$x
-  , y           = sims$y
-  , CellID      = raster::extract(grid, sims[, c("x", "y")])
+    ID          = sims_inter$ID
+  , x           = sims_inter$x
+  , y           = sims_inter$y
+  , StepID      = sims_inter$segment_id
+  , CellID      = raster::extract(grid, sims_inter[, c("x", "y")])
 )
 
 # Now we write a function that we can use to retrieve the visitation history
@@ -126,7 +149,7 @@ visitHist(c(1, 2, 2, 2, 3, 1), singlecount = F)
 visits <- visits %>% nest(data = -ID)
 
 # Then apply the function
-visits <- mutate(visits, history = map(data, function(x){
+visits <- mutate(visits, history = map(data, function(x) {
   visitHist(x$CellID, singlecount = T)
 }))
 
@@ -158,7 +181,19 @@ betweenness <- crop(betweenness, ext)
 plot_betweenness <- ggplot(as.data.frame(betweenness, xy = T)) +
   geom_raster(aes(x = x, y = y, fill = layer)) +
   geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
-  scale_fill_viridis(option = "magma", name = "Betweenness", trans = "sqrt") +
+  scale_fill_viridis(
+      option = "magma"
+    , name   = "Betweenness"
+    # , trans  = "sqrt"
+    , guide   = guide_colorbar(
+        show.limits    = T
+      , title.position = "top"
+      , title.hjust    = 0.5
+      , ticks          = T
+      , barheight      = unit(0.3, "cm")
+      , barwidth       = unit(10.0, "cm")
+    )
+  ) +
   theme_minimal() +
   theme(legend.position = "bottom") +
   ggtitle("Betweenness") +
@@ -168,6 +203,28 @@ plot_betweenness
 ################################################################################
 #### Inter-Patch Connectivity
 ################################################################################
+# Rasterize the naional parks
+npsr <- rasterize(nps, disaggregate(grid, fact = 10), field = "ID")
+
+# Use the raster to identify through which areas each trajectory passes
+visits <- data.frame(
+    ID          = sims_inter$ID
+  , x           = sims_inter$x
+  , y           = sims_inter$y
+  , StepID      = sims_inter$segment_id
+  , SourceArea  = sims_inter$SourceArea
+  , CurrentArea = raster::extract(npsr, sims_inter[, c("x", "y")])
+)
+
+# Count the number of connections from one area to another and the duration it
+# takes
+conns <- visits %>%
+  subset(SourceArea != CurrentArea) %>%
+  group_by(ID, SourceArea, CurrentArea) %>%
+  summarize(Steps = min(StepID), .groups = "drop") %>%
+  group_by(SourceArea, CurrentArea) %>%
+  summarize(MeanSteps = mean(Steps), TotalConnections = n(), .groups = "drop")
+
 # Finally, we want to visualize the relative frequency at which simulated
 # individuals are moving between national parks. For this, let's give each
 # national park an ID.
@@ -219,12 +276,32 @@ net_p <- ggnetwork(net, layout = lay, arrow.gap = 1, scale = F)
 plot_interpatch <- ggplot(as.data.frame(cov[[1]], xy = T)) +
   geom_raster(aes(x = x, y = y), fill = "black") +
   geom_sf(data = st_as_sf(nps), col = "white", fill = NA) +
-  geom_edges(data = net_p, aes(x = x, y = y, xend = xend, yend = yend
-    , size = total_connections), color = magma(20)[15], curvature = 0.2
-    , arrow = arrow(length = unit(6, "pt"), type = "closed", angle = 30)) +
+  geom_edges(
+      data      = net_p
+    , mapping   = aes(x = x, y = y, xend = xend, yend = yend , size = TotalConnections, col = MeanSteps)
+    , curvature = 0.2
+    , arrow     = arrow(length = unit(6, "pt"), type = "closed", angle = 30)
+  ) +
   geom_nodes(data = net_p, aes(x = x, y = y), col = "white") +
-  scale_size_area(name = "Total Connections", max_size = 0.5, breaks = 1:5
-    , trans = "exp") +
+  scale_color_viridis_c(
+      option = "plasma"
+    , name   = "Duration (Number of Steps)"
+    , begin  = 0.3
+    , guide  = guide_colorbar(
+        show.limits    = T
+      , title.position = "top"
+      , title.hjust    = 0.5
+      , ticks          = T
+      , barheight      = unit(0.3, "cm")
+      , barwidth       = unit(4.0, "cm")
+    )
+  ) +
+  scale_size_area(
+      name     = "Total Connections"
+    , max_size = 0.5
+    , breaks   = 1: 5
+    , trans    = "exp"
+  ) +
   theme_minimal() +
   theme(legend.position = "bottom") +
   ggtitle("Inter-Patch Connectivity") +
@@ -245,6 +322,3 @@ p3 <- plot_interpatch + theme(legend.position = "none"
 # Arrange the plots
 p <- ggarrange(p1, p2, p3)
 p
-
-# Let's store the arranged plots to file
-ggsave(plot = p, "ConnectivityPlots.png", bg = "white", width = 8, height = 8)
