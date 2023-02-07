@@ -21,12 +21,13 @@ library(tidyverse)      # For data wrangling
 library(sf)             # For nice plots
 library(lubridate)      # To handle times
 library(rgdal)          # To save shapefile
+library(here)
 
 # Set working directory
-# setwd("/home/david/ownCloud/DispersalSimulation")
+setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation/SimulationStudy")
 
 # Load custom functions
-source("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation/00_Functions.R")
+source("00_Functions.R")
 
 ################################################################################
 #### Simulate Covariates

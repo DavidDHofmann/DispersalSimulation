@@ -18,7 +18,7 @@ library(sf)            # For nice plots
 library(pbmcapply)     # For parallel computing
 
 # Set working directory
-# setwd("/home/david/ownCloud/DispersalSimulation")
+setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation/SimulationStudy")
 
 # Load custom functions
 source("00_Functions.R")

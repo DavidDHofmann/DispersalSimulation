@@ -19,7 +19,7 @@ library(parallel)       # For parallel computing (on windows)
 library(sf)             # To plot spatial things with ggplot
 
 # Set working directory
-setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation")
+setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation/SimulationStudy")
 
 # Load custom functions
 source("00_Functions.R")

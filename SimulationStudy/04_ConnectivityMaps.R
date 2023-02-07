@@ -22,7 +22,7 @@ library(ggpubr)         # To arrange multiple ggplots
 library(ggnetwork)      # To plot a network using ggplot
 
 # Set working directory
-setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation")
+setwd("/home/david/ownCloud/Dokumente/Bibliothek/Wissen/R-Scripts/DispersalSimulation/SimulationStudy")
 
 # Load custom functions
 source("00_Functions.R")
@@ -83,7 +83,7 @@ plot_heatmap <- ggplot(as.data.frame(heatmap, xy = T)) +
       , title.hjust    = 0.5
       , ticks          = T
       , barheight      = unit(0.3, "cm")
-      , barwidth       = unit(10.0, "cm")
+      , barwidth       = unit(5.0, "cm")
     )
   ) +
   theme_minimal() +
@@ -191,7 +191,7 @@ plot_betweenness <- ggplot(as.data.frame(betweenness, xy = T)) +
       , title.hjust    = 0.5
       , ticks          = T
       , barheight      = unit(0.3, "cm")
-      , barwidth       = unit(10.0, "cm")
+      , barwidth       = unit(5.0, "cm")
     )
   ) +
   theme_minimal() +
@@ -225,46 +225,6 @@ conns <- visits %>%
   group_by(SourceArea, CurrentArea) %>%
   summarize(MeanSteps = mean(Steps), TotalConnections = n(), .groups = "drop")
 
-# Finally, we want to visualize the relative frequency at which simulated
-# individuals are moving between national parks. For this, let's give each
-# national park an ID.
-nps$ID <- 1:nrow(nps)
-
-# In order to determine interpatch connectivity between national parks, we need
-# to know from which national park trajectories leave and into which other
-# national parks they go to. We can use the first coordinate of each simulated
-# trajectory to determine from which national park the trajectory leaves
-first <- subset(sims, step_number == 1)
-coordinates(first) <- c("x", "y")
-plot(first, pch = 20, cex = 0.3)
-
-# Determine with which national park each startpoint intersects (can only be
-# one)
-from <- gIntersects(nps, first, byid = T)
-from <- apply(from, 1, which)
-from <- as.vector(from)
-
-# Let's also check whith which national parks each trajectory intersects
-to <- gIntersects(nps, tracks, byid = T)
-to <- as.data.frame(to)
-names(to) <- 1:3
-
-# Put all into a single dataframe
-inter <- cbind(first$ID, from, to)
-names(inter)[1:2] <- c("ID", "from")
-
-# Let's count how many individuals were released at each national park. Here,
-# this is not too interesting as we put the same number of dispersers in each
-# national park.
-inter %>% count(from)
-
-# Let's count the number of connections from one park to another
-conns <- inter %>%
-  gather(key = to, value = reached, 3:ncol(.)) %>%
-  subset(reached & from != to) %>%
-  group_by(from, to) %>%
-  summarize(total_connections = n(), .groups = "drop")
-
 # Generate network
 net <- graph_from_data_frame(conns, vertices = nps$ID)
 lay <- coordinates(gCentroid(nps, byid = T))
@@ -285,22 +245,27 @@ plot_interpatch <- ggplot(as.data.frame(cov[[1]], xy = T)) +
   geom_nodes(data = net_p, aes(x = x, y = y), col = "white") +
   scale_color_viridis_c(
       option = "plasma"
-    , name   = "Duration (Number of Steps)"
+    , name   = "Duration (No. Steps)"
     , begin  = 0.3
+    , breaks = c(110, 130, 150, 170)
     , guide  = guide_colorbar(
         show.limits    = T
       , title.position = "top"
       , title.hjust    = 0.5
       , ticks          = T
       , barheight      = unit(0.3, "cm")
-      , barwidth       = unit(4.0, "cm")
+      , barwidth       = unit(3.0, "cm")
     )
   ) +
   scale_size_area(
       name     = "Total Connections"
     , max_size = 0.5
-    , breaks   = 1: 5
-    , trans    = "exp"
+    , breaks   = 1:5
+    # , trans    = "exp"
+    , guide = guide_legend(
+        title.position = "top"
+      , title.hjust    = 0.5
+    )
   ) +
   theme_minimal() +
   theme(legend.position = "bottom") +
@@ -312,13 +277,11 @@ plot_interpatch
 #### Combining all Plots
 ################################################################################
 # Remove the legends for now and rotate y-axes
-p1 <- plot_heatmap + theme(legend.position = "none"
-  , axis.title.y = element_text(angle = 0, vjust = 0.5))
-p2 <- plot_betweenness + theme(legend.position = "none"
-  , axis.title.y = element_text(angle = 0, vjust = 0.5))
-p3 <- plot_interpatch + theme(legend.position = "none"
-  , axis.title.y = element_text(angle = 0, vjust = 0.5))
+p1 <- plot_heatmap + theme(axis.title.y = element_text(angle = 0, vjust = 0.5))
+p2 <- plot_betweenness + theme(axis.title.y = element_text(angle = 0, vjust = 0.5))
+p3 <- plot_interpatch + theme(axis.title.y = element_text(angle = 0, vjust = 0.5))
 
 # Arrange the plots
 p <- ggarrange(p1, p2, p3)
+ggsave("ConnectivityMetrics.png", width = 8, height = 8, bg = "white")
 p
